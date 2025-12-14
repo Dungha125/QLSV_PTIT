@@ -1,195 +1,257 @@
-import axios from 'axios';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
+import { axiosClient } from "../../api/axiosClient";
 
 const AddEvent = ({ onAddEvent, onClose }) => {
-    const [eventName, setEventName] = useState('');
-    const [eventStart, setEventStart] = useState('');
-    const [eventFinish, setEventFinish] = useState('');
-    const [eventOrganization, setEventOrganization] = useState('');
-    const [eventAddress, setEventAddress] = useState('');
-    const [eventSemester, setEventSemester] = useState('');
-    const [eventDescription, setEventDescription] = useState('');
-    const [message, setMessage] = useState('');
+    const [eventName, setEventName] = useState("");
+    const [eventStart, setEventStart] = useState("");
+    const [eventFinish, setEventFinish] = useState("");
+    const [eventOrganization, setEventOrganization] = useState("");
+    const [eventAddress, setEventAddress] = useState("");
+    const [eventSemester, setEventSemester] = useState("");
+    const [eventDescription, setEventDescription] = useState("");
+
+    // 🔹 Cấu hình đăng ký
+    const [registerStart, setRegisterStart] = useState("");
+    const [registerEnd, setRegisterEnd] = useState("");
+    const [maxParticipants, setMaxParticipants] = useState("");
+    const [registrationVisibility, setRegistrationVisibility] = useState(0);
+
     const [semesters, setSemesters] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [popup, setPopup] = useState({ show: false, type: '', text: '' });
+    const [popup, setPopup] = useState({ show: false, type: "", text: "" });
 
-    const token = localStorage.getItem('authToken');
-    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
-
-    const handleCancel = () => {
-        showPopup('false', 'Đã huỷ tạo sự kiện!'); // Huỷ hàm tạo sự kiện
-        setTimeout(() => {
-            if (onClose) onClose();
-            window.location.reload();
-        }, 1500);
+    // ===== Helpers =====
+    const showPopup = (type, text) => {
+        setPopup({ show: true, type, text });
+        setTimeout(() => setPopup({ show: false, type: "", text: "" }), 3000);
     };
 
-    // Fetch semesters
+    const formatDateTime = (date) => {
+        if (!date) return null;
+        const d = new Date(date);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+            d.getDate()
+        ).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(
+            d.getMinutes()
+        ).padStart(2, "0")}:00`;
+    };
+
+    // ===== Fetch semesters =====
     useEffect(() => {
         const fetchSemesters = async () => {
             try {
-                const response = await axios.get(`${API_BASE_URL}/semesters`, {
-                    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-                });
-                setSemesters(response.data.data || []);
-            } catch (error) {
-                console.error('Error fetching semesters:', error);
-                showPopup('error', 'Không thể tải danh sách học kỳ.');
+                const res = await axiosClient.get("/semesters");
+                setSemesters(res?.data?.data ?? []);
+            } catch (e) {
+                console.error(e);
+                showPopup("error", "Không thể tải danh sách học kỳ.");
             }
         };
         fetchSemesters();
-    }, [token, API_BASE_URL]);
+    }, []);
 
-    const formatDateTime = (date) => {
-        const d = new Date(date);
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-    };
-    
-
-    const showPopup = (type, text) => {
-        setPopup({ show: true, type, text });
-        setTimeout(() => setPopup({ show: false, type: '', text: '' }), 3000);
-    };
-
+    // ===== Submit =====
     const handleCreateEvent = async (e) => {
         e.preventDefault();
 
-        if (!eventName || !eventStart || !eventFinish || !eventOrganization || !eventAddress || !eventSemester) {
-            showPopup('error', 'Vui lòng điền đầy đủ thông tin!');
+        // Basic validate
+        if (
+            !eventName ||
+            !eventStart ||
+            !eventFinish ||
+            !eventOrganization ||
+            !eventAddress ||
+            !eventSemester
+        ) {
+            showPopup("error", "Vui lòng điền đầy đủ thông tin bắt buộc!");
             return;
         }
 
         if (new Date(eventFinish) <= new Date(eventStart)) {
-            showPopup('error', 'Thời gian kết thúc phải sau thời gian bắt đầu!');
+            showPopup("error", "Thời gian kết thúc phải sau thời gian bắt đầu!");
             return;
         }
 
-        const semesterId = parseInt(eventSemester, 10);
-        if (isNaN(semesterId) || semesterId <= 0) {
-            showPopup('error', 'Vui lòng chọn học kỳ hợp lệ!');
+        // Validate đăng ký
+        if (registerStart && registerEnd && new Date(registerEnd) <= new Date(registerStart)) {
+            showPopup("error", "Thời gian đóng đăng ký phải sau thời gian mở đăng ký!");
             return;
         }
 
         setLoading(true);
         try {
-            await axios.post(
-                `${API_BASE_URL}/events`,
-                {
-                    name: eventName,
-                    organization: eventOrganization,
-                    description: eventDescription,
-                    address: eventAddress,
-                    semester_id: semesterId,
-                    start_at: formatDateTime(eventStart),
-                    finish_at: formatDateTime(eventFinish),
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json',
-                    },
-                }
-            );
+            const payload = {
+                name: eventName,
+                organization: eventOrganization,
+                description: eventDescription,
+                address: eventAddress,
+                semester_id: Number(eventSemester),
+                start_at: formatDateTime(eventStart),
+                finish_at: formatDateTime(eventFinish),
 
-            showPopup('success', 'Sự kiện đã được tạo thành công!');
+                // 🔹 registration config
+                register_start_at: formatDateTime(registerStart),
+                register_end_at: formatDateTime(registerEnd),
+                max_participants: maxParticipants ? Number(maxParticipants) : null,
+                registration_visibility: Number(registrationVisibility),
+            };
+
+            await axiosClient.post("/events", payload);
+
+            showPopup("success", "Sự kiện đã được tạo thành công!");
             if (onAddEvent) onAddEvent();
+
             setTimeout(() => {
                 if (onClose) onClose();
-                window.location.reload();
-            }, 1500);
+            }, 1200);
         } catch (error) {
+            console.error(error);
+            showPopup(
+                "error",
+                error?.response?.data?.message || "Lỗi khi tạo sự kiện!"
+            );
+        } finally {
             setLoading(false);
-            let errorMessage = 'Lỗi khi tạo sự kiện!';
-            if (error.response?.data?.message) errorMessage += ` ${error.response.data.message}`;
-            showPopup('error', errorMessage);
         }
     };
 
-    return (
-        <div className='fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50'>
-            {/* Form Container */}
-            <div className='bg-white p-6 rounded-lg shadow-lg w-full max-w-lg'>
-                <h2 className='text-xl font-bold mb-4 text-gray-800 text-center'>Thêm Sự Kiện</h2>
-                <form onSubmit={handleCreateEvent} className='space-y-4'>
+    const handleCancel = () => {
+        showPopup("error", "Đã huỷ tạo sự kiện!");
+        setTimeout(() => {
+            if (onClose) onClose();
+        }, 800);
+    };
 
-                    {/* Event Name */}
+    return (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg overflow-y-auto max-h-[90vh]">
+                <h2 className="text-xl font-bold mb-4 text-gray-800 text-center">
+                    Thêm Sự Kiện
+                </h2>
+
+                <form onSubmit={handleCreateEvent} className="space-y-4">
                     <input
-                        type='text'
-                        placeholder='Tên sự kiện'
+                        type="text"
+                        placeholder="Tên sự kiện"
                         value={eventName}
                         onChange={(e) => setEventName(e.target.value)}
-                        className='w-full border px-3 py-2 rounded focus:ring focus:ring-blue-300'
+                        className="w-full border px-3 py-2 rounded"
                     />
 
-                    {/* Organization */}
                     <input
-                        type='text'
-                        placeholder='Đơn vị tổ chức'
+                        type="text"
+                        placeholder="Đơn vị tổ chức"
                         value={eventOrganization}
                         onChange={(e) => setEventOrganization(e.target.value)}
-                        className='w-full border px-3 py-2 rounded focus:ring focus:ring-blue-300'
+                        className="w-full border px-3 py-2 rounded"
                     />
 
-                    {/* Address */}
                     <input
-                        type='text'
-                        placeholder='Địa điểm'
+                        type="text"
+                        placeholder="Địa điểm"
                         value={eventAddress}
                         onChange={(e) => setEventAddress(e.target.value)}
-                        className='w-full border px-3 py-2 rounded focus:ring focus:ring-blue-300'
+                        className="w-full border px-3 py-2 rounded"
                     />
 
-                    {/* Semester */}
                     <select
                         value={eventSemester}
                         onChange={(e) => setEventSemester(e.target.value)}
-                        className='w-full border px-3 py-2 rounded focus:ring focus:ring-blue-300'
+                        className="w-full border px-3 py-2 rounded"
                     >
-                        <option value=''>Chọn học kỳ</option>
-                        {semesters.map((semester) => (
-                            <option key={semester.id} value={semester.id}>{semester.name}</option>
+                        <option value="">Chọn học kỳ</option>
+                        {semesters.map((s) => (
+                            <option key={s.id} value={s.id}>
+                                {s.name}
+                            </option>
                         ))}
                     </select>
 
-                    {/* Start Time */}
                     <input
-                        type='datetime-local'
+                        type="datetime-local"
                         value={eventStart}
                         onChange={(e) => setEventStart(e.target.value)}
-                        className='w-full border px-3 py-2 rounded focus:ring focus:ring-blue-300'
+                        className="w-full border px-3 py-2 rounded"
                     />
 
-                    {/* Finish Time */}
                     <input
-                        type='datetime-local'
+                        type="datetime-local"
                         value={eventFinish}
                         onChange={(e) => setEventFinish(e.target.value)}
-                        className='w-full border px-3 py-2 rounded focus:ring focus:ring-blue-300'
+                        className="w-full border px-3 py-2 rounded"
                     />
 
-                    {/* Description */}
                     <textarea
-                        placeholder='Mô tả sự kiện'
+                        placeholder="Mô tả sự kiện"
                         value={eventDescription}
                         onChange={(e) => setEventDescription(e.target.value)}
-                        className='w-full border px-3 py-2 rounded focus:ring focus:ring-blue-300'
-                    ></textarea>
+                        className="w-full border px-3 py-2 rounded"
+                    />
 
-                    {/* Buttons */}
-                    <div className='flex justify-end space-x-2'>
-                        <button type='button' onClick={handleCancel} className='px-4 py-2 bg-gray-500 text-white rounded'>Hủy</button>
-                        <button type='submit' className='px-4 py-2 bg-blue-600 text-white rounded' disabled={loading}>
-                            {loading ? 'Đang tạo...' : 'Tạo sự kiện'}
+                    {/* ===== Cấu hình đăng ký ===== */}
+                    <hr />
+                    <h3 className="font-semibold">Cấu hình đăng ký</h3>
+
+                    <input
+                        type="datetime-local"
+                        value={registerStart}
+                        onChange={(e) => setRegisterStart(e.target.value)}
+                        className="w-full border px-3 py-2 rounded"
+                        placeholder="Mở đăng ký"
+                    />
+
+                    <input
+                        type="datetime-local"
+                        value={registerEnd}
+                        onChange={(e) => setRegisterEnd(e.target.value)}
+                        className="w-full border px-3 py-2 rounded"
+                        placeholder="Đóng đăng ký"
+                    />
+
+                    <input
+                        type="number"
+                        min={1}
+                        placeholder="Số lượng tối đa (để trống = không giới hạn)"
+                        value={maxParticipants}
+                        onChange={(e) => setMaxParticipants(e.target.value)}
+                        className="w-full border px-3 py-2 rounded"
+                    />
+
+                    <select
+                        value={registrationVisibility}
+                        onChange={(e) => setRegistrationVisibility(e.target.value)}
+                        className="w-full border px-3 py-2 rounded"
+                    >
+                        <option value={0}>Chỉ quản trị xem danh sách</option>
+                        <option value={1}>Công khai</option>
+                        <option value={2}>Chỉ người đã đăng ký</option>
+                    </select>
+
+                    <div className="flex justify-end space-x-2 pt-2">
+                        <button
+                            type="button"
+                            onClick={handleCancel}
+                            className="px-4 py-2 bg-gray-500 text-white rounded"
+                        >
+                            Huỷ
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="px-4 py-2 bg-blue-600 text-white rounded"
+                        >
+                            {loading ? "Đang tạo..." : "Tạo sự kiện"}
                         </button>
                     </div>
                 </form>
             </div>
 
-            {/* Popup Notification */}
             {popup.show && (
-                <div className={`fixed top-10 right-10 p-4 rounded shadow-md text-white ${popup.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                <div
+                    className={`fixed top-10 right-10 p-4 rounded shadow-md text-white ${
+                        popup.type === "success" ? "bg-green-500" : "bg-red-500"
+                    }`}
+                >
                     {popup.text}
                 </div>
             )}

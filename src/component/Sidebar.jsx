@@ -30,6 +30,11 @@ const Sidebar = ({setRefresh}) => {
   });
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
+  const handleClickBlacklist = () => {
+    navigate("/quanly/blacklist");
+    setIsSidebarOpen(false);
+  };
+
   const handleClickAccount = () => {
     navigate('/quanly/account');
   };
@@ -211,6 +216,19 @@ const Sidebar = ({setRefresh}) => {
               Học kỳ
             </li>
             </>
+          )}
+          {/* Blacklist - chỉ admin (member_group === 6) */}
+          {account.member_group === 6 && (
+              <li
+                  onClick={handleClickBlacklist}
+                  className={`mb-4 p-2 rounded cursor-pointer ${
+                      location.pathname === "/quanly/blacklist"
+                          ? "bg-white text-neutral-900"
+                          : "bg-none hover:bg-gray-700"
+                  }`}
+              >
+                Blacklist
+              </li>
           )}
 
           {/* Hiển thị "Tổ chức" nếu role id === 1 */}
